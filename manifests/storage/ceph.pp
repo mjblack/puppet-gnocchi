@@ -40,9 +40,16 @@
 #   (optional) Ceph configuration file.
 #   Defaults to '/etc/ceph/ceph.conf'.
 #
+# [*manage_rados*]
+#   (optional) Ensure state of the rados python package.
+#   Defaults to true.
+#
+# DEPRECATED PARAMETERS
+#
 # [*manage_cradox*]
 #   (optional) Ensure state of the cradox package.
-#   Defaults to True.
+#   As of ceph jewel the python-rados package should be used.
+#   Defaults to false.
 #
 class gnocchi::storage::ceph(
   $ceph_username,
@@ -50,11 +57,24 @@ class gnocchi::storage::ceph(
   $ceph_secret    = $::os_service_default,
   $ceph_pool      = 'gnocchi',
   $ceph_conffile  = '/etc/ceph/ceph.conf',
-  $manage_cradox  = true,
+  $manage_rados   = true,
+  # DEPRECATED PARAMETERS
+  $manage_cradox  = false,
 ) inherits gnocchi::params {
 
   if (is_service_default($ceph_keyring) and is_service_default($ceph_secret)) or (! $ceph_keyring and ! $ceph_secret) {
     fail('You need to specify either gnocchi::storage::ceph::ceph_keyring or gnocchi::storage::ceph::ceph_secret.')
+  }
+
+  if $manage_rados and $manage_cradox {
+    fail('gnocchi::storage::ceph::manage_rados and gnocchi::storage::ceph::manage_cradox both cannot be set to true.')
+  }
+
+  if $manage_cradox {
+    warning('gnocchi::storage::ceph::manage_cradox is deprecated and will be removed in future release.')
+    if $::osfamily == 'Debian' {
+      fail('gnocchi::storage::ceph::manage_cradox set to true on debian family will fail due to no package being available.')
+    }
   }
 
   gnocchi_config {
@@ -71,6 +91,16 @@ class gnocchi::storage::ceph(
       ensure_packages('python-cradox', {
         'ensure' => 'present',
         'name'   => $::gnocchi::params::cradox_package_name,
+        'tag'    => ['openstack','gnocchi-package'],
+      })
+    }
+  }
+
+  if $manage_rados {
+    if $::gnocchi::params::common_package_name {
+      ensure_packages('python-rados', {
+        'ensure' => 'present',
+        'name'   => $::gnocchi::params::rados_package_name,
         'tag'    => ['openstack','gnocchi-package'],
       })
     }
